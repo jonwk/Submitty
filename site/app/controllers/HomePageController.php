@@ -17,13 +17,15 @@ use Symfony\Component\Routing\Annotation\Route;
  * Controller to deal with the submitty home page. Once the user has been authenticated, but before they have
  * selected which course they want to access, they are forwarded to the home page.
  */
-class HomePageController extends AbstractController {
+class HomePageController extends AbstractController
+{
     /**
      * HomePageController constructor.
      *
      * @param Core $core
      */
-    public function __construct(Core $core) {
+    public function __construct(Core $core)
+    {
         parent::__construct($core);
     }
 
@@ -35,7 +37,8 @@ class HomePageController extends AbstractController {
      * @param bool|string $as_instructor
      * @return MultiResponse
      */
-    public function getCourses($user_id = null, $as_instructor = false) {
+    public function getCourses($user_id = null, $as_instructor = false)
+    {
         if ($as_instructor === 'true') {
             $as_instructor = true;
         }
@@ -69,12 +72,58 @@ class HomePageController extends AbstractController {
     }
 
     /**
+     * @Route("/api/gradeables", methods={"GET"})
+     *
+     * @return MultiResponse
+     */
+    public function getGradeables()
+    {
+        // gets parameters from url
+        $semester = $_GET["semester"];
+        $course = $_GET["course"];
+
+
+        //security feature to protect against sql injection
+        if (preg_match('/[^a-z_\-0-9]/i', $semester) or preg_match('/[^a-z_\-0-9]/i', $course)) {
+            die("Course and semester must be alphanumeric");
+        }
+
+
+        // connects to the db, config file of submitty for host and port
+        $db = pg_connect("host=localhost port=5432 dbname=submitty_" . $semester . "_" . $course . " user=submitty_dbuser password=submitty_dbuser") or die("Cannot establish db connection");
+        // sql selects gradeable id and gradeable title
+        $query = "SELECT g_id, g_title FROM gradeable ORDER BY g_title ASC";
+        // executes the query
+        $rs = pg_query($db, $query) or die("Cannot execute query: $query\n");
+
+
+        // $all_gradeables = $this->core->getQueries()->getAllGradeablesIdsAndTitles();
+        //var_dump($all_gradeables);
+        //var_dump($all_gradeables);
+
+
+        $response_data = array();
+        // fetches rows from response
+        while ($row = pg_fetch_row($rs)) {
+            // create sub array and push it to the bigger array
+            $temparray = array("id" => $row[0], "title" => $row[1]);
+            array_push($response_data, $temparray);
+        }
+
+        //   returning that json response.
+        return MultiResponse::JsonOnlyResponse(
+            JsonResponse::getSuccessResponse($response_data)
+        );
+    }
+
+    /**
      * @Route("/home/groups")
      *
      * @param null $user_id
      * @return MultiResponse
      */
-    public function getGroups($user_id = null): MultiResponse {
+    public function getGroups($user_id = null): MultiResponse
+    {
         $user = $this->core->getUser();
         if (is_null($user) || !$user->accessFaculty()) {
             return new MultiResponse(
@@ -100,7 +149,8 @@ class HomePageController extends AbstractController {
      * @Route("/home")
      * @return MultiResponse
      */
-    public function showHomepage() {
+    public function showHomepage()
+    {
         $courses = $this->getCourses()->json_response->json;
 
         return new MultiResponse(
@@ -119,7 +169,8 @@ class HomePageController extends AbstractController {
      * @Route("/home/courses/new", methods={"POST"})
      * @Route("/api/courses", methods={"POST"})
      */
-    public function createCourse() {
+    public function createCourse()
+    {
         $user = $this->core->getUser();
         if (is_null($user) || !$user->accessFaculty()) {
             return new MultiResponse(
@@ -219,8 +270,7 @@ class HomePageController extends AbstractController {
                     new RedirectResponse($this->core->buildUrl(['home', 'courses', 'new']))
                 );
             }
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             $error = "Server error.";
             $this->core->addErrorMessage($error);
             return new MultiResponse(
@@ -252,7 +302,8 @@ class HomePageController extends AbstractController {
     /**
      * @Route("/home/courses/new", methods={"GET"})
      */
-    public function createCoursePage() {
+    public function createCoursePage()
+    {
         $user = $this->core->getUser();
         if (is_null($user) || !$user->accessFaculty()) {
             return new MultiResponse(
@@ -285,7 +336,8 @@ class HomePageController extends AbstractController {
      *
      * @return MultiResponse
      */
-    public function getGroupUsers($group_name = null): MultiResponse {
+    public function getGroupUsers($group_name = null): MultiResponse
+    {
         if (!$this->core->getUser()->accessFaculty()) {
             return new MultiResponse(
                 JsonResponse::getFailResponse("You don't have access to this endpoint."),
@@ -317,7 +369,8 @@ class HomePageController extends AbstractController {
      * @Route("/term/new", methods={"POST"})
      * @return MultiResponse
      */
-    public function addNewTerm() {
+    public function addNewTerm()
+    {
         if (!$this->core->getUser()->isSuperUser()) {
             return new MultiResponse(
                 JsonResponse::getFailResponse("You don't have access to this endpoint."),
@@ -334,11 +387,9 @@ class HomePageController extends AbstractController {
             $terms = $this->core->getQueries()->getAllTerms();
             if (in_array($term_id, $terms)) {
                 $this->core->addErrorMessage("Term id already exists.");
-            }
-            elseif ($end_date < $start_date) {
+            } elseif ($end_date < $start_date) {
                 $this->core->addErrorMessage("End date should be after Start date.");
-            }
-            else {
+            } else {
                 $this->core->getQueries()->createNewTerm($term_id, $term_name, $start_date, $end_date);
                 $this->core->addSuccessMessage("Term added successfully.");
             }
@@ -352,7 +403,8 @@ class HomePageController extends AbstractController {
      * @Route("/update", methods={"GET"})
      * @return MultiResponse|WebResponse
      */
-    public function systemUpdatePage() {
+    public function systemUpdatePage()
+    {
         $user = $this->core->getUser();
         if (is_null($user) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
             return new MultiResponse(
