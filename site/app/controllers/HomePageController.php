@@ -124,7 +124,6 @@ class HomePageController extends AbstractController
      */
     public function getGroups($user_id = null): MultiResponse
     {
-        // added new line
         $user = $this->core->getUser();
         if (is_null($user) || !$user->accessFaculty()) {
             return new MultiResponse(
