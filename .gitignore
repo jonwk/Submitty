@@ -45,5 +45,3 @@ Pipfile.lock
 .phpunit.result.cache
 
 .env
-
-GIT_CHECKOUT
