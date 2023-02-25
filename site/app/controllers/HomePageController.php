@@ -143,7 +143,7 @@ class HomePageController extends AbstractController
         // Load the gradeable information for each course
         $courses = $this->core->getQueries()->getCourseForUserId($user->getId());
         foreach ($courses as $course) {
-            $gradeables_of_course = GradeableUtils::getGradeablesFromCourse($this->core, $course);
+            $gradeables_of_course = GradeableUtils::getGradeablesFromCourseApi($this->core, $course);
             $gradeables = array_merge($gradeables, $gradeables_of_course["gradeables"]);
         }
 
