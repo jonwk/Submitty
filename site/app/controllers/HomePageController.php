@@ -3,6 +3,9 @@
 namespace app\controllers;
 
 use app\libraries\response\RedirectResponse;
+use app\models\gradeable\Component;
+use app\models\gradeable\Gradeable;
+use app\models\gradeable\GradeableUtils;
 use app\models\Course;
 use app\models\User;
 use app\libraries\Core;
@@ -113,6 +116,46 @@ class HomePageController extends AbstractController
         //   returning that json response.
         return MultiResponse::JsonOnlyResponse(
             JsonResponse::getSuccessResponse($response_data)
+        );
+    }
+
+
+    /**
+     * @Route("/api/ryan/gradeables", methods={"GET"})
+     *
+     * @return MultiResponse
+     */
+    public function getRyanGradeables($user_id = null)
+    {
+        // header("Access-Control-Allow-Origin: *");
+        // header("Access-Control-Allow-Credentials: true");
+        // header("Access-Control-Allow-Methods: GET, POST");
+
+        // This goes through each course of the user, puts all gradeables into an array,
+        // then for each gradeable it array_maps the info
+
+        $user = $this->core->getUser();
+        if (is_null($user_id) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
+            $user_id = $user->getId();
+        }
+
+        $gradeables = [];
+        // Load the gradeable information for each course
+        $courses = $this->core->getQueries()->getCourseForUserId($user->getId());
+        foreach ($courses as $course) {
+            $gradeables_of_course = GradeableUtils::getGradeablesFromCourse($this->core, $course);
+            $gradeables = array_merge($gradeables, $gradeables_of_course["gradeables"]);
+        }
+
+        $callback = function (Gradeable $gradeable) {
+            return $gradeable->getGradeableInfo();
+        };
+
+
+        return MultiResponse::JsonOnlyResponse(
+            JsonResponse::getSuccessResponse([
+                "gradeable_info" => array_map($callback, $gradeables),
+            ])
         );
     }
 

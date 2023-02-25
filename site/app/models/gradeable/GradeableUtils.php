@@ -8,7 +8,8 @@ use app\models\Course;
 use app\models\User;
 use app\views\NavigationView;
 
-class GradeableUtils {
+class GradeableUtils
+{
     /**
      * Get the gradeables of a specified course.
      *
@@ -17,7 +18,10 @@ class GradeableUtils {
      * @return array<string, array<string, Gradeable>|array<string, GradedGradeable>|array<string, Button>>
      * @throws \Exception
      */
-    public static function getGradeablesFromCourse(Core $core, Course $course): array {
+    public static function getGradeablesFromCourse(Core $core, Course $course): array
+    {
+        /** @var array */
+        $config = [];
         /** @var array<string, Gradeable> $gradeables */
         $gradeables = [];
         /** @var Gradeable[] $visible_gradeables */
@@ -26,6 +30,7 @@ class GradeableUtils {
         $graded_gradeables = [];
         /** @var array<string, Button> $submit_btns */
         $submit_btns = [];
+
 
         // Load the database and configuration of a course
         $core->loadCourseConfig($course->getSemester(), $course->getTitle());
@@ -51,8 +56,7 @@ class GradeableUtils {
             $section = GradeableList::getGradeableSection($core, $gradeable);
             if ($section === -1) {
                 $submit_btns[$key] = null;
-            }
-            else {
+            } else {
                 $submit_btns[$key] = NavigationView::getSubmitButton($core, $gradeable, $graded_gradeable, $section, $can_submit_everyone);
             }
         }
@@ -61,6 +65,35 @@ class GradeableUtils {
         $core->getCourseDB()->disconnect();
 
         return ["gradeables" => $gradeables, "graded_gradeables" => $graded_gradeables, "submit_btns" => $submit_btns];
+    }
+
+
+    public static function getGradeablesFromCourseApi(Core $core, Course $course): array
+    {
+        /** @var array<string, Gradeable> $gradeables */
+        $gradeables = [];
+        /** @var Gradeable[] $visible_gradeables */
+        $visible_gradeables = [];
+        // Load the database and configuration of a course
+        $core->loadCourseConfig($course->getSemester(), $course->getTitle());
+        $core->loadCourseDatabase();
+
+        // Load all Gradeable objects of the current course
+        foreach ($core->getQueries()->getGradeableConfigs(null) as $gradeable) {
+            /** @var Gradeable $gradeable */
+            // $gradeables[serialize([$course->getSemester(), $course->getTitle(), $gradeable->getId()])] = $gradeable;
+
+            // array_push($gradeables[$course->getTitle()], $gradeable);
+
+            // $gradeables[serialize([$course->getTitle()])] = $gradeable;
+            $gradeables[serialize([$course->getSemester(), $course->getTitle(), $gradeable->getId()])] = $gradeable;
+            $visible_gradeables[] = $gradeable;
+        }
+
+        // Disconnect from the course database
+        $core->getCourseDB()->disconnect();
+
+        return ["gradeables" => $gradeables];
     }
 
     /**
@@ -74,7 +107,8 @@ class GradeableUtils {
      * @return array<string, array<string, Gradeable>|array<string, GradedGradeable>|array<string, Button>>
      * @throws \Exception if a Gradeable failed to load from the database
      */
-    public static function getAllGradeableListFromUserId(Core $core, User $user): array {
+    public static function getAllGradeableListFromUserId(Core $core, User $user): array
+    {
         $gradeables = [];
         $graded_gradeables = [];
         $submit_btns = [];
