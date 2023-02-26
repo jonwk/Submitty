@@ -78,6 +78,7 @@ class GradeableUtils
         $core->loadCourseConfig($course->getSemester(), $course->getTitle());
         $core->loadCourseDatabase();
 
+        $user_ids = [];
         // Load all Gradeable objects of the current course
         foreach ($core->getQueries()->getGradeableConfigs(null) as $gradeable) {
             /** @var Gradeable $gradeable */
@@ -86,14 +87,27 @@ class GradeableUtils
             // array_push($gradeables[$course->getTitle()], $gradeable);
 
             // $gradeables[serialize([$course->getTitle()])] = $gradeable;
-            $gradeables[serialize([$course->getSemester(), $course->getTitle(), $gradeable->getId()])] = $gradeable;
+            $str = $course->getSemester() . " - " . $course->getTitle() . " - " . $gradeable->getId();
+            // $gradeables[serialize([$course->getSemester(), $course->getTitle(), $gradeable->getId()])] = $gradeable;
+            $gradeables[$str] = $gradeable;
             $visible_gradeables[] = $gradeable;
+            $teamless_users = [];
+            if ($gradeable->isTeamAssignment()) {
+                $user_ids = $core->getQueries()->getUsersOnTeamsForGradeable($gradeable);
+                // Collect user ids so we know who isn't on a team
+                $students = $core->getQueries()->getAllUsers();
+                foreach ($students as $user) {
+                    if (!in_array($user->getId(), $user_ids)) {
+                        $teamless_users[] = $user;
+                    }
+                }
+            }
         }
 
         // Disconnect from the course database
         $core->getCourseDB()->disconnect();
 
-        return ["gradeables" => $gradeables];
+        return ["gradeables" => $gradeables, "user_ids" => $user_ids];
     }
 
     /**

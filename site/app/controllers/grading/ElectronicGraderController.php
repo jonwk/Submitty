@@ -982,7 +982,7 @@ class ElectronicGraderController extends AbstractController
 
         // $rawAnonIds = $this->core->getQueries()->getAllAnonIdsByGradeableWithUserIds($gradeable->getId());
         // if ($gradeable->isTeamAssignment()) {
-            // $rawAnonIds = array_merge($rawAnonIds, $this->core->getQueries()->getAllTeamAnonIdsByGradeable($gradeable->getId()));
+        // $rawAnonIds = array_merge($rawAnonIds, $this->core->getQueries()->getAllTeamAnonIdsByGradeable($gradeable->getId()));
         // }
         // $anon_ids = [];
         // foreach ($rawAnonIds as $anon) {
@@ -1053,7 +1053,7 @@ class ElectronicGraderController extends AbstractController
         // $db = pg_connect("host=localhost port=5432 dbname=submitty_" . $semester . "_" . $course . " user=submitty_dbuser password=submitty_dbuser") or die("Cannot establish db connection");
         // sql selects gradeable id and gradeable title
         // $query = "SELECT team_id, g_id FROM gradeable_teams";
-        $query = "SELECT team_id, anon_id FROM gradeable_teams WHERE g_id=$gradeable_id" ;
+        $query = "SELECT team_id, anon_id FROM gradeable_teams WHERE g_id=$gradeable_id";
         // executes the query
         $rs = pg_query($db, $query) or die("Cannot execute query: $query\n");
 

@@ -2,6 +2,13 @@
 
 namespace app\controllers;
 
+namespace app\controllers;
+
+use app\controllers\student\SubmissionController;
+use app\exceptions\IOException;
+use app\libraries\FileUtils;
+use app\libraries\Utils;
+
 use app\libraries\response\RedirectResponse;
 use app\models\gradeable\Component;
 use app\models\gradeable\Gradeable;
@@ -22,6 +29,7 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class HomePageController extends AbstractController
 {
+
     /**
      * HomePageController constructor.
      *
@@ -31,6 +39,204 @@ class HomePageController extends AbstractController
     {
         parent::__construct($core);
     }
+
+
+    // /**
+    //  * Creates a file with the given contents to be used to upload for a specified part.
+    //  *
+    //  * @param string $filename
+    //  * @param string $content
+    //  * @param int    $part
+    //  */
+    // private function addUploadFile($filename, $content = "", $part = 1)
+    // {
+    //     $this->config['tmp_path'] = FileUtils::joinPaths(sys_get_temp_dir(), Utils::generateRandomString());
+
+    //     FileUtils::createDir(FileUtils::joinPaths($this->config['tmp_path'], 'files', 'part' . $part), true, 0777);
+    //     $filepath = FileUtils::joinPaths($this->config['tmp_path'], 'files', 'part' . $part, $filename);
+
+    //     if (file_put_contents($filepath, $content) === false) {
+    //         throw new IOException("Could not write file to {$filepath}");
+    //     }
+    //     $_FILES["files{$part}"]['name'][] = $filename;
+    //     $_FILES["files{$part}"]['type'][] = mime_content_type($filepath);
+    //     $_FILES["files{$part}"]['size'][] = filesize($filepath);
+    //     $_FILES["files{$part}"]['tmp_name'][] = $filepath;
+    //     $_FILES["files{$part}"]['error'][] = null;
+    // }
+
+
+    private $user_id_to_User_cache = [];
+
+
+    /**
+     * Submit a submission to a gradeable
+     * @Route("/api/getFile/{_semester}/{_course}/gradeable/{gradeable_id}/submissions", methods={"GET"}))
+     * @param string $gradeable_id
+     * @param string|null $user_id
+     * @return MultiResponse
+     */
+    public function getFile($gradeable_id = null, $user_id = null, int $display_version = 0)
+    {
+        // http://localhost:1511/s23/sample/gradeable/grading_homework/grading/details
+        $user = $this->core->getUser();
+
+        // print("gradeable_id: ". $gradeable_id);
+
+        if (is_null($user_id) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
+            $user_id = $user->getId();
+        }
+
+        $user_id = "bitdiddle";
+        // print("user_id: ". $user_id);
+
+        // $user_id = 'aphacker';
+        // $gradeable_id = 'grading_homework';
+        // $display_version = 1;
+
+        if (!is_null($gradeable_id) && !is_null($user_id)) {
+            $gradeable = $this->tryGetGradeable($gradeable_id, false);
+            if ($gradeable === false) {
+                return false;
+            }
+            $graded_gradeable =  $this->tryGetGradedGradeable($gradeable, $user_id, false);
+            if ($graded_gradeable === false) {
+                return false;
+            }
+        }
+
+        $add_files = function (&$files, $new_files, $start_dir_name, $graded_gradeable) {
+            $files[$start_dir_name] = [];
+            $hidden_files = $graded_gradeable->getGradeable()->getHiddenFiles();
+            if ($new_files) {
+                foreach ($new_files as $file) {
+                    $skipping = false;
+                    foreach (explode(",", $hidden_files) as $file_regex) {
+                        $file_regex = trim($file_regex);
+                        if (fnmatch($file_regex, $file["name"]) && $this->core->getUser()->getGroup() > 3) {
+                            $skipping = true;
+                        }
+                    }
+                    if (!$skipping) {
+                        if ($start_dir_name == "submissions") {
+                            $file["path"] = $this->setAnonPath($file["path"], $graded_gradeable->getGradeableId());
+                        }
+                        $path = explode('/', $file['relative_name']);
+                        array_pop($path);
+                        $working_dir = &$files[$start_dir_name];
+                        foreach ($path as $dir) {
+                            /** @var array $working_dir */
+                            if (!isset($working_dir[$dir])) {
+                                $working_dir[$dir] = [];
+                            }
+                            $working_dir = &$working_dir[$dir];
+                        }
+                        $working_dir[$file['name']] = $file['path'];
+                    }
+                }
+            }
+        };
+
+        $submissions = [];
+        $results = [];
+        $results_public = [];
+        $checkout = [];
+
+        // NOTE TO FUTURE DEVS: There is code around line 830 (ctrl-f openAll) which depends on these names,
+        // if you change here, then change there as well
+        // order of these statements matter I believe
+        // $graded_gradeable = $this->tryGetGradedGradeable($gradeable_id, $user_id, false);
+        // print("graded_gradeable: ". $graded_gradeable);
+
+        $display_version = $graded_gradeable->getAutoGradedGradeable()->getActiveVersion();
+        // print("display_version: " . $display_version);
+        $display_version_instance = $graded_gradeable->getAutoGradedGradeable()->getAutoGradedVersionInstance($display_version);
+        $isVcs = $graded_gradeable->getGradeable()->isVcs();
+        if ($display_version_instance !==  null) {
+            $meta_files = $display_version_instance->getMetaFiles();
+            $files = $display_version_instance->getFiles();
+
+            $add_files($submissions, array_merge($meta_files['submissions'], $files['submissions']), 'submissions', $graded_gradeable);
+            $add_files($checkout, array_merge($meta_files['checkout'], $files['checkout']), 'checkout', $graded_gradeable);
+            $add_files($results, $display_version_instance->getResultsFiles(), 'results', $graded_gradeable);
+            $add_files($results_public, $display_version_instance->getResultsPublicFiles(), 'results_public', $graded_gradeable);
+        }
+        $student_grader = false;
+        if ($this->core->getUser()->getGroup() == User::GROUP_STUDENT) {
+            $student_grader = true;
+        }
+
+        $submitter_id = $graded_gradeable->getSubmitter()->getId();
+        $anon_submitter_id = $graded_gradeable->getSubmitter()->getAnonId($graded_gradeable->getGradeableId());
+        $user_ids[$anon_submitter_id] = $submitter_id;
+
+        print("Submissions: ");
+        print_r($submissions);
+
+        // // print "$gradeable_id and $user_id are not null\n";
+
+        // $file_name = basename($path);
+        // // print "file_name: $file_name\n";
+        // $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $file_name;
+        // // print "corrected_name: $corrected_name\n";
+        // $mime_type = mime_content_type($corrected_name);
+        // // print "mime_type: $mime_type\n";
+        // $file_type = FileUtils::getContentType($file_name);
+        // // print "file_type: $file_type\n";
+        // if ($mime_type === "application/pdf" || (str_starts_with($mime_type, "image/") && $mime_type !== "image/svg+xml")) {
+        //     // $this->core->getOutput()->useHeader(false);
+        //     // $this->core->getOutput()->useFooter(false);
+        //     // header("Content-type: " . $mime_type);
+        //     // header('Content-Disposition: inline; filename="' . $file_name . '"');
+        //     readfile($corrected_name);
+        //     // $this->core->getOutput()->renderString($path);
+        //     var_dump($path);
+        // }
+
+        // $callback = function (String $course) {
+        //     return $course->getCourseInfo();
+        // };
+
+        return MultiResponse::JsonOnlyResponse(
+            JsonResponse::getSuccessResponse([
+                "SUCCESS" => "Success",
+            ])
+        );
+
+        // $this->addUploadFile("test1.txt", "", 1);
+
+        // $controller = new SubmissionController($this->core);
+        // $return = $controller->ajaxUploadSubmission('c_failure_messages');
+        // // $return = $controller->ajaxUploadSubmission('hi');
+
+    }
+
+    /**
+     * Replace the userId with the corresponding anon_id in the given file_path
+     * @param string $file_path
+     * @param string $g_id
+     * @return string $anon_path
+     */
+    public function setAnonPath($file_path, $g_id)
+    {
+        $file_path_parts = explode("/", $file_path);
+        $anon_path = "";
+        for ($index = 1; $index < count($file_path_parts); $index++) {
+            if ($index == 9) {
+                $user_id[] = $file_path_parts[$index];
+                if (!array_key_exists($user_id[0], $this->user_id_to_User_cache)) {
+                    $this->user_id_to_User_cache[$user_id[0]] = $this->core->getQueries()->getUsersOrTeamsById($user_id)[$user_id[0]];
+                }
+                $user_or_team = $this->user_id_to_User_cache[$user_id[0]];
+                $anon_id = $user_or_team->getAnonId($g_id);
+                $anon_path = $anon_path . "/" . $anon_id;
+            } else {
+                $anon_path = $anon_path . "/" . $file_path_parts[$index];
+            }
+        }
+        return $anon_path;
+    }
+
 
     /**
      * @Route("/api/courses", methods={"GET"})
@@ -140,16 +346,20 @@ class HomePageController extends AbstractController
         }
 
         $gradeables = [];
+        $user_ids = [];
         // Load the gradeable information for each course
         $courses = $this->core->getQueries()->getCourseForUserId($user->getId());
         foreach ($courses as $course) {
             $gradeables_of_course = GradeableUtils::getGradeablesFromCourseApi($this->core, $course);
+            var_dump($gradeables_of_course["user_ids"]);
             $gradeables = array_merge($gradeables, $gradeables_of_course["gradeables"]);
+            $user_ids = array_merge($user_ids, $gradeables_of_course["user_ids"]);
         }
 
         $callback = function (Gradeable $gradeable) {
             return $gradeable->getGradeableInfo();
         };
+
 
 
         return MultiResponse::JsonOnlyResponse(
