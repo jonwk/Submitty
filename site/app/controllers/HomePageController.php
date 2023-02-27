@@ -71,7 +71,7 @@ class HomePageController extends AbstractController
 
     /**
      * Submit a submission to a gradeable
-     * @Route("/api/getFile/{_semester}/{_course}/gradeable/{gradeable_id}/submissions", methods={"GET"}))
+     * @Route("/api/getFile/{_semester}/{_course}/gradeable/{gradeable_id}/{user_id}/submissions", methods={"GET"}))
      * @param string $gradeable_id
      * @param string|null $user_id
      * @return MultiResponse
@@ -83,16 +83,9 @@ class HomePageController extends AbstractController
 
         // print("gradeable_id: ". $gradeable_id);
 
-        if (is_null($user_id) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
-            $user_id = $user->getId();
-        }
-
-        $user_id = "bitdiddle";
-        // print("user_id: ". $user_id);
-
-        // $user_id = 'aphacker';
-        // $gradeable_id = 'grading_homework';
-        // $display_version = 1;
+        // if (is_null($user_id) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
+        //     $user_id = $user->getId();
+        // }
 
         if (!is_null($gradeable_id) && !is_null($user_id)) {
             $gradeable = $this->tryGetGradeable($gradeable_id, false);
@@ -137,6 +130,8 @@ class HomePageController extends AbstractController
             }
         };
 
+
+
         $submissions = [];
         $results = [];
         $results_public = [];
@@ -145,13 +140,10 @@ class HomePageController extends AbstractController
         // NOTE TO FUTURE DEVS: There is code around line 830 (ctrl-f openAll) which depends on these names,
         // if you change here, then change there as well
         // order of these statements matter I believe
-        // $graded_gradeable = $this->tryGetGradedGradeable($gradeable_id, $user_id, false);
-        // print("graded_gradeable: ". $graded_gradeable);
 
         $display_version = $graded_gradeable->getAutoGradedGradeable()->getActiveVersion();
-        // print("display_version: " . $display_version);
         $display_version_instance = $graded_gradeable->getAutoGradedGradeable()->getAutoGradedVersionInstance($display_version);
-        $isVcs = $graded_gradeable->getGradeable()->isVcs();
+        // $isVcs = $graded_gradeable->getGradeable()->isVcs();
         if ($display_version_instance !==  null) {
             $meta_files = $display_version_instance->getMetaFiles();
             $files = $display_version_instance->getFiles();
@@ -170,46 +162,64 @@ class HomePageController extends AbstractController
         $anon_submitter_id = $graded_gradeable->getSubmitter()->getAnonId($graded_gradeable->getGradeableId());
         $user_ids[$anon_submitter_id] = $submitter_id;
 
-        print("Submissions: ");
-        print_r($submissions);
+        // print("user_id: " . $user_id . "\r\n");
+        // print("user_id: " . $user->getId() . "\r\n");
+        // print("Submissions: " . "\r\n");
+        // print_r($submissions);
 
-        // // print "$gradeable_id and $user_id are not null\n";
-
-        // $file_name = basename($path);
-        // // print "file_name: $file_name\n";
-        // $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $file_name;
-        // // print "corrected_name: $corrected_name\n";
-        // $mime_type = mime_content_type($corrected_name);
-        // // print "mime_type: $mime_type\n";
-        // $file_type = FileUtils::getContentType($file_name);
-        // // print "file_type: $file_type\n";
-        // if ($mime_type === "application/pdf" || (str_starts_with($mime_type, "image/") && $mime_type !== "image/svg+xml")) {
-        //     // $this->core->getOutput()->useHeader(false);
-        //     // $this->core->getOutput()->useFooter(false);
-        //     // header("Content-type: " . $mime_type);
-        //     // header('Content-Disposition: inline; filename="' . $file_name . '"');
-        //     readfile($corrected_name);
-        //     // $this->core->getOutput()->renderString($path);
-        //     var_dump($path);
+        // foreach ($submissions as $key1 => $value1) {
+        //     echo "Submission Files for " . $user_id . "\n";
+        //     foreach ($value1 as $key2 => $value2) {
+        //         echo "File name: " . $key2 . "\n";
+        //         $dir = 'submissions';
+        //         $fileUrl = $make_url($value2, $dir, $gradeable_id);
+        //         echo "Url: " . $fileUrl . "\n";
+        //     }
         // }
 
-        // $callback = function (String $course) {
-        //     return $course->getCourseInfo();
-        // };
 
+        $callback = function ($value2, $dir, $gradeable_id) {
+            $make_url = function ($path, $dir, $gradeable_id) {
+                $filename = basename($path);
+                $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $filename;
+                $file_type = FileUtils::getContentType($filename);
+
+
+                $corrected_filename = rawurlencode(htmlspecialchars($filename));
+                $path = rawurlencode(htmlspecialchars($path . "%"));
+                $path = rtrim($path, "%2525");
+
+                $url = $this->core->buildCourseUrl(['display_file']) . '?' . http_build_query([
+                    'dir' => $dir,
+                    'file' => $corrected_filename,
+                    'path' => $path,
+                    'ta_grading' => 'true',
+                    'gradeable_id' => $gradeable_id,
+                ]);
+
+                return $url;
+            };
+            $fileUrl = $make_url($value2, $dir, $gradeable_id);
+            return $fileUrl;
+        };
+
+        $dir = 'submissions';
+        $fileUrls = [];
+        foreach ($submissions as $key1 => $value1) {
+            foreach ($value1 as $key2 => $path) {
+                $dir = 'submissions';
+                $fileUrl = $callback($path, $dir, $gradeable_id);
+                $filename = basename($path);
+                $fileUrls[] = [$filename => $fileUrl];
+            }
+        }
+
+        // TODO for nested files and for no submissions
         return MultiResponse::JsonOnlyResponse(
-            JsonResponse::getSuccessResponse([
-                "SUCCESS" => "Success",
-            ])
+            JsonResponse::getSuccessResponse(["user_id" => $user_id, "submissions" => $fileUrls])
         );
-
-        // $this->addUploadFile("test1.txt", "", 1);
-
-        // $controller = new SubmissionController($this->core);
-        // $return = $controller->ajaxUploadSubmission('c_failure_messages');
-        // // $return = $controller->ajaxUploadSubmission('hi');
-
     }
+
 
     /**
      * Replace the userId with the corresponding anon_id in the given file_path

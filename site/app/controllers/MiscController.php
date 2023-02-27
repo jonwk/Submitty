@@ -15,7 +15,8 @@ use app\views\MiscView;
 use Symfony\Component\Routing\Annotation\Route;
 use app\models\User;
 
-class MiscController extends AbstractController {
+class MiscController extends AbstractController
+{
     const GENERIC_NO_ACCESS_MSG = 'You do not have access to this file';
 
     /**
@@ -26,14 +27,16 @@ class MiscController extends AbstractController {
      *
      * @Route("/server_time")
      */
-    public function getServerTime(): JsonResponse {
+    public function getServerTime(): JsonResponse
+    {
         return JsonResponse::getSuccessResponse(DateUtils::getServerTimeJson($this->core));
     }
 
     /**
      * Given a path that may or may not contain the anon_id instead of the user_id return the path containing the user_id
      */
-    public function decodeAnonPath($path, $g_id = null) {
+    public function decodeAnonPath($path, $g_id = null)
+    {
         $exploded_path = explode("/", $path);
         if (count($exploded_path) < 10) {
             return $path;
@@ -50,7 +53,8 @@ class MiscController extends AbstractController {
      * @Route("/courses/{_semester}/{_course}/gradeable/{gradeable_id}/encode_pdf")
      * @return MultiResponse
      */
-    public function encodePDF($gradeable_id) {
+    public function encodePDF($gradeable_id)
+    {
         $id = $_POST['user_id'] ?? null;
         $file_name = $_POST['filename'] ?? null;
         $file_name = html_entity_decode($file_name);
@@ -62,16 +66,14 @@ class MiscController extends AbstractController {
         $directory = 'invalid';
         if (strpos($file_path, 'submissions') !== false) {
             $directory = 'submissions';
-        }
-        elseif (strpos($file_path, 'checkout') !== false) {
+        } elseif (strpos($file_path, 'checkout') !== false) {
             $directory = 'checkout';
         }
         $check_path = FileUtils::joinPaths($this->core->getConfig()->getCoursePath(), $directory, $gradeable_id, $id, $active_version);
 
         if ($gradeable->isGradeByRegistration()) {
             $section = $submitter->getRegistrationSection();
-        }
-        else {
+        } else {
             $section = $submitter->getRotatingSection();
         }
 
@@ -96,7 +98,8 @@ class MiscController extends AbstractController {
     /**
      * @Route("/courses/{_semester}/{_course}/display_file")
      */
-    public function displayFile($dir = null, $path = null, $gradeable_id = null, $user_id = null, $ta_grading = null, $course_material_id = null) {
+    public function displayFile($dir = null, $path = null, $gradeable_id = null, $user_id = null, $ta_grading = null, $course_material_id = null)
+    {
         $cm = null;
         //Is this per-gradeable?
         if ($course_material_id === null && ($dir !== null && $path !== null)) {
@@ -110,15 +113,13 @@ class MiscController extends AbstractController {
                 $cm = $this->core->getCourseEntityManager()->getRepository(CourseMaterial::class)
                     ->findOneBy(['path' => $path]);
             }
-        }
-        else {
+        } else {
             $cm = $this->core->getCourseEntityManager()->getRepository(CourseMaterial::class)
                 ->findOneBy(['id' => $course_material_id]);
             if ($cm !== null) {
                 $path = $cm->getPath();
                 $dir = 'course_materials';
-            }
-            else {
+            } else {
                 $path = null;
             }
         }
@@ -136,8 +137,7 @@ class MiscController extends AbstractController {
                 $this->core->getOutput()->showError(self::GENERIC_NO_ACCESS_MSG);
                 return false;
             }
-        }
-        else {
+        } else {
             // Check access through Access library
             if (!$this->core->getAccess()->canI("path.read", ["dir" => $dir, "path" => $path])) {
                 $this->core->getOutput()->showError(self::GENERIC_NO_ACCESS_MSG);
@@ -147,8 +147,7 @@ class MiscController extends AbstractController {
             if ($dir == 'course_materials' && !$this->core->getUser()->accessGrading()) {
                 if ($cm === null) {
                     $access_failure = 'Course material not found';
-                }
-                else {
+                } else {
                     $access_failure = CourseMaterialsUtils::finalAccessCourseMaterialCheck($this->core, $cm);
                 }
                 if ($access_failure) {
@@ -163,9 +162,13 @@ class MiscController extends AbstractController {
         }
 
         $file_name = basename($path);
+        // print("file_name: " . $file_name . "\r\n");
         $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $file_name;
+        // print("corrected_name: " . $corrected_name . "\r\n");
         $mime_type = mime_content_type($corrected_name);
+        // print("mime_type: " . $mime_type . "\r\n");
         $file_type = FileUtils::getContentType($file_name);
+        // print("file_type: " . $file_type . "\r\n");
         if ($mime_type === "application/pdf" || (str_starts_with($mime_type, "image/") && $mime_type !== "image/svg+xml")) {
             $this->core->getOutput()->useHeader(false);
             $this->core->getOutput()->useFooter(false);
@@ -173,27 +176,66 @@ class MiscController extends AbstractController {
             header('Content-Disposition: inline; filename="' . $file_name . '"');
             readfile($corrected_name);
             $this->core->getOutput()->renderString($path);
-        }
-        else {
+        } else {
             $contents = file_get_contents($corrected_name);
+            $modContents = "file_name: " . $file_name . "\r\n" . "corrected_name: " . $corrected_name . "\r\n" . "mime_type: " . $mime_type . "\r\n" . "file_type: " . $file_type . "\r\n" . $contents . "\r\n";
+            // print("contents: " . $contents . "\r\n");
             if (!is_null($ta_grading) && $ta_grading === "true") {
                 $newlines = substr_count($contents, "\n");
                 $carriage_returns = substr_count($contents, "\r");
                 if ($newlines + $carriage_returns > 2000) {
                     return new WebResponse(MiscView::class, 'tooLarge');
                 }
-                $this->core->getOutput()->renderOutput('Misc', 'displayCode', $file_type, $corrected_name, $contents);
-            }
-            else {
-                $this->core->getOutput()->renderOutput('Misc', 'displayFile', $contents);
+                $this->core->getOutput()->renderOutput('Misc', 'displayCode', $file_type, $corrected_name, $modContents);
+            } else {
+                $this->core->getOutput()->renderOutput('Misc', 'displayFile', $modContents);
             }
         }
     }
 
+    // /**
+    //  * @Route("/courses/{_semester}/{_course}/display_file")
+    //  */
+    // public function displayFileAPI($dir = null, $path = null, $gradeable_id = null, $user_id = null, $ta_grading = null) {
+    //     $cm = null;
+    //     if (!$this->core->getAccess()->canI("path.read", ["dir" => $dir, "path" => $path, "gradeable" => $gradeable, "graded_gradeable" => $graded_gradeable])) {
+    //         $this->core->getOutput()->showError(self::GENERIC_NO_ACCESS_MSG);
+    //         return false;
+    //     }
+
+    //     $file_name = basename($path);
+    //     $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $file_name;
+    //     $mime_type = mime_content_type($corrected_name);
+    //     $file_type = FileUtils::getContentType($file_name);
+    //     if ($mime_type === "application/pdf" || (str_starts_with($mime_type, "image/") && $mime_type !== "image/svg+xml")) {
+    //         $this->core->getOutput()->useHeader(false);
+    //         $this->core->getOutput()->useFooter(false);
+    //         header("Content-type: " . $mime_type);
+    //         header('Content-Disposition: inline; filename="' . $file_name . '"');
+    //         readfile($corrected_name);
+    //         $this->core->getOutput()->renderString($path);
+    //     }
+    //     else {
+    //         $contents = file_get_contents($corrected_name);
+    //         if (!is_null($ta_grading) && $ta_grading === "true") {
+    //             $newlines = substr_count($contents, "\n");
+    //             $carriage_returns = substr_count($contents, "\r");
+    //             if ($newlines + $carriage_returns > 2000) {
+    //                 return new WebResponse(MiscView::class, 'tooLarge');
+    //             }
+    //             $this->core->getOutput()->renderOutput('Misc', 'displayCode', $file_type, $corrected_name, $contents);
+    //         }
+    //         else {
+    //             $this->core->getOutput()->renderOutput('Misc', 'displayFile', $contents);
+    //         }
+    //     }
+    // }
+
     /**
      * @Route("/courses/{_semester}/{_course}/read_file")
      */
-    public function readFile($dir, $path, $csrf_token = null) {
+    public function readFile($dir, $path, $csrf_token = null)
+    {
         // security check
         if (!$this->core->getAccess()->canI("path.read", ["dir" => $dir, "path" => $path])) {
             $this->core->getOutput()->showError(self::GENERIC_NO_ACCESS_MSG);
@@ -213,11 +255,9 @@ class MiscController extends AbstractController {
         if ($mime_type === 'text/plain') {
             if (substr($path, '-3') === '.js') {
                 $mime_type = 'application/javascript';
-            }
-            elseif (substr($path, '-4') === '.css') {
+            } elseif (substr($path, '-4') === '.css') {
                 $mime_type = 'text/css';
-            }
-            elseif (substr($path, '-5') === '.html') {
+            } elseif (substr($path, '-5') === '.html') {
                 $mime_type = 'text/html';
             }
         }
@@ -229,7 +269,8 @@ class MiscController extends AbstractController {
     /**
      * @Route("/courses/{_semester}/{_course}/download")
      */
-    public function downloadCourseFile($dir = null, $path = null, $course_material_id = null, $gradeable_id = null) {
+    public function downloadCourseFile($dir = null, $path = null, $course_material_id = null, $gradeable_id = null)
+    {
         // security check
         $cm = null;
         if ($course_material_id === null && ($dir !== null && $path !== null)) {
@@ -239,8 +280,7 @@ class MiscController extends AbstractController {
                 return false;
             }
             $path = $this->decodeAnonPath($res_path, $gradeable_id);
-        }
-        elseif ($course_material_id !== null) {
+        } elseif ($course_material_id !== null) {
             $cm = $this->core->getCourseEntityManager()->getRepository(CourseMaterial::class)
                 ->findOneBy(['id' => $course_material_id]);
             if ($cm !== null) {
@@ -257,8 +297,7 @@ class MiscController extends AbstractController {
         if ($dir == 'course_materials' && !$this->core->getUser()->accessGrading()) {
             if ($cm === null) {
                 $access_failure = 'Course material not found';
-            }
-            else {
+            } else {
                 $access_failure = CourseMaterialsUtils::finalAccessCourseMaterialCheck($this->core, $cm);
             }
             if ($access_failure) {
@@ -283,7 +322,8 @@ class MiscController extends AbstractController {
     /**
      * @Route("/courses/{_semester}/{_course}/gradeable/{gradeable_id}/downloadTestCaseResult")
      */
-    public function downloadTestCaseResult(string $gradeable_id, int $version, int $test_case, string $file_name, string $user_id) {
+    public function downloadTestCaseResult(string $gradeable_id, int $version, int $test_case, string $file_name, string $user_id)
+    {
         $gradeable = $this->tryGetGradeable($gradeable_id);
         $graded_gradeable = $this->tryGetGradedGradeable($gradeable, $user_id, false);
         if ($user_id !== $this->core->getUser()->getId()) {
@@ -313,13 +353,11 @@ class MiscController extends AbstractController {
                 header("Content-Transfer-Encoding: Binary");
                 header("Content-disposition: attachment; filename=\"{$file_name}\"");
                 readfile($file_path);
-            }
-            else {
+            } else {
                 $this->core->addErrorMessage("That file does not seem to exist");
                 return new RedirectResponse($this->core->buildCourseUrl(['gradeable', $gradeable_id]));
             }
-        }
-        else {
+        } else {
             $this->core->addErrorMessage("That file does not seem to exist");
             return new RedirectResponse($this->core->buildCourseUrl(['gradeable', $gradeable_id]));
         }
@@ -328,7 +366,8 @@ class MiscController extends AbstractController {
     /**
      * @Route("/courses/{_semester}/{_course}/gradeable/{gradeable_id}/download_zip")
      */
-    public function downloadSubmissionZip($gradeable_id, $user_id, $version, $is_anon, $origin = null) {
+    public function downloadSubmissionZip($gradeable_id, $user_id, $version, $is_anon, $origin = null)
+    {
 
         $anon_id = $user_id;
         if ($is_anon === "true") {
@@ -399,8 +438,7 @@ class MiscController extends AbstractController {
         // When single/double blind grading is merged, this will need to be updated.
         if ($this->core->getUser()->getGroup() === User::GROUP_STUDENT) {
             $zip_file_name = $gradeable_id . "_" . $anon_id . "_v" . $version . ".zip";
-        }
-        else {
+        } else {
             $zip_file_name = $gradeable_id . "_" . $user_id . "_v" . $version . ".zip";
         }
 
@@ -438,7 +476,8 @@ class MiscController extends AbstractController {
      * @Route("/courses/{_semester}/{_course}/gradeable/{gradeable_id}/grading/download_zip")
      * @AccessControl(role="LIMITED_ACCESS_GRADER")
      */
-    public function downloadAssignedZips($gradeable_id, $type = null) {
+    public function downloadAssignedZips($gradeable_id, $type = null)
+    {
         $zip_file_name = $gradeable_id . "_section_students_" . date("m-d-Y") . ".zip";
         $this->core->getOutput()->useHeader(false);
         $this->core->getOutput()->useFooter(false);
@@ -488,8 +527,7 @@ class MiscController extends AbstractController {
                         $message = "Oops! That page is not available.";
                         $this->core->addErrorMessage($message);
                         $this->core->redirect($this->core->buildCourseUrl());
-                    }
-                    else {
+                    } else {
                         $files = new \RecursiveIteratorIterator(
                             new \RecursiveDirectoryIterator($gradeable_path),
                             \RecursiveIteratorIterator::LEAVES_ONLY
@@ -505,22 +543,19 @@ class MiscController extends AbstractController {
                             }
                         }
                     }
-                }
-                else { //no dir exists with this name
+                } else { //no dir exists with this name
                     $message = "Oops! That page is not available.";
                     $this->core->addErrorMessage($message);
                     $this->core->redirect($this->core->buildCourseUrl());
                 }
-            }
-            elseif (in_array($type, ["active", "both"])) {
+            } elseif (in_array($type, ["active", "both"])) {
                 $zip_stream->addFile($path . "/", "");
                 if (file_exists($gradeable_path)) {
                     if (!is_dir($gradeable_path)) { //if dir is already present, but it's a file
                         $message = "Oops! That page is not available.";
                         $this->core->addErrorMessage($message);
                         $this->core->redirect($this->core->buildCourseUrl());
-                    }
-                    else {
+                    } else {
                         $graded_gradeables = $this->core->getQueries()->getGradedGradeables([$gradeable]);
 
                         foreach ($graded_gradeables as $gg) { //get each graded gradeable
@@ -555,21 +590,18 @@ class MiscController extends AbstractController {
                             }
                         }
                     }
-                }
-                else { //no dir exists with this name
+                } else { //no dir exists with this name
                     $message = "Oops! That page is not available.";
                     $this->core->addErrorMessage($message);
                     $this->core->redirect($this->core->buildCourseUrl());
                 }
-            }
-            else {
+            } else {
                 //gets the students that are part of the sections
                 if ($gradeable->isGradeByRegistration()) {
                     $section_key = "registration_section";
                     $sections = $this->core->getUser()->getGradingRegistrationSections();
                     $students = $this->core->getQueries()->getUsersByRegistrationSections($sections);
-                }
-                else {
+                } else {
                     $section_key = "rotating_section";
                     $sections = $this->core->getQueries()->getRotatingSectionsForGradeableAndUser(
                         $gradeable->getId(),
@@ -593,8 +625,7 @@ class MiscController extends AbstractController {
                                     continue;
                                 }
                                 $temp_path = $gradeable_path . "/" . $file . "/" . $version;
-                            }
-                            else {
+                            } else {
                                 $temp_path = $gradeable_path . "/" . $file;
                             }
                             $files_in_folder = new \RecursiveIteratorIterator(
@@ -637,7 +668,8 @@ class MiscController extends AbstractController {
      * @Route("/courses/{_semester}/{_course}/gradeable/{gradeable_id}/bulk/progress")
      * @AccessControl(role="FULL_ACCESS_GRADER")
      */
-    public function checkBulkProgress($gradeable_id) {
+    public function checkBulkProgress($gradeable_id)
+    {
         $job_path = "/var/local/submitty/daemon_job_queue/";
         $result = [];
         $found = false;
@@ -647,8 +679,7 @@ class MiscController extends AbstractController {
             foreach (scandir($job_path) as $job) {
                 if (strpos($job, 'bulk_upload_') !== false) {
                     $found = true;
-                }
-                else {
+                } else {
                     continue;
                 }
                 //remove 'bulk_upload_' and '.json' from job file name
@@ -670,8 +701,7 @@ class MiscController extends AbstractController {
             }
             $result = ['found' => $found, 'job_data' => $result, 'count' => $complete_count];
             return $this->core->getOutput()->renderJsonSuccess($result);
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return $this->core->getOutput()->renderJsonError($e->getMessage());
         }
     }

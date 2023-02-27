@@ -27,7 +27,8 @@ use Ds\Set;
  * class or if the application has thrown an uncaught exception
  */
 
-class Output {
+class Output
+{
     /** @var bool */
     private $render = true;
 
@@ -70,7 +71,8 @@ class Output {
      */
     protected $core;
 
-    public function __construct(Core $core) {
+    public function __construct(Core $core)
+    {
         $this->core = $core;
         $this->start_time = microtime(true);
         $this->controller = new GlobalController($core);
@@ -85,18 +87,21 @@ class Output {
      * immediately. This allows us to not have to mock out this class when we're using
      * it for the JSON response stuff.
      */
-    public function disableRender() {
+    public function disableRender()
+    {
         $this->render = false;
     }
 
     /**
      * @return bool
      */
-    public function getRender() {
+    public function getRender()
+    {
         return $this->render;
     }
 
-    public function loadTwig($full_load = true) {
+    public function loadTwig($full_load = true)
+    {
         $template_root = FileUtils::joinPaths(dirname(__DIR__), 'templates');
         $cache_path = FileUtils::joinPaths(dirname(dirname(__DIR__)), 'cache', 'twig');
         $debug = $full_load && $this->core->getConfig()->isDebug();
@@ -119,7 +124,7 @@ class Output {
             return call_user_func_array('self::renderTemplate', $args);
         }, ["is_safe" => ["html"]]));
         $this->twig->addFunction(new \Twig\TwigFunction('base64_image', function (string $base64_data, string $mime_type, string $title): string {
-                return <<<HTML
+            return <<<HTML
 <img alt="${title}" src="data:${mime_type};base64,${base64_data}" />
 HTML;
         }, ['is_safe' => ['html']]));
@@ -160,7 +165,8 @@ HTML;
         $this->twig->addExtension(new MarkdownExtension($engine));
     }
 
-    public function setInternalResources() {
+    public function setInternalResources()
+    {
         $this->addVendorCss(FileUtils::joinPaths('fontawesome', 'css', 'all.min.css'));
         $this->addInternalCss(FileUtils::joinPaths('google', 'inconsolata.css'));
         $this->addInternalCss(FileUtils::joinPaths('google', 'pt_sans.css'));
@@ -193,15 +199,15 @@ HTML;
      * using renderTemplate when you plan to then use that rendered View in
      * rendering another View
      */
-    public function renderOutput($view, string $function, ...$args) {
+    public function renderOutput($view, string $function, ...$args)
+    {
         if (!$this->render) {
             return null;
         }
 
         if ($this->buffer_output) {
             $this->output_buffer .= $this->renderTemplate($view, $function, ...$args);
-        }
-        else {
+        } else {
             $this->renderTemplate($view, $function, ...$args);
         }
     }
@@ -222,7 +228,8 @@ HTML;
      *
      * @return null|string
      */
-    public function renderTemplate($view, string $function, ...$args) {
+    public function renderTemplate($view, string $function, ...$args)
+    {
         if (!$this->render) {
             return null;
         }
@@ -243,7 +250,8 @@ HTML;
      * instead to ensure JSON responses have consistent format.
      * @param mixed $json
      */
-    public function renderJson($json) {
+    public function renderJson($json)
+    {
         $this->output_buffer = json_encode($json, JSON_PRETTY_PRINT);
         $this->useFooter(false);
         $this->useHeader(false);
@@ -255,7 +263,8 @@ HTML;
      * @param mixed|null $data Response data
      * @return array the unencoded response
      */
-    public function renderJsonSuccess($data = null) {
+    public function renderJsonSuccess($data = null)
+    {
         $response = [
             'status' => 'success',
             'data' => $data
@@ -275,7 +284,8 @@ HTML;
      * @param array $extra Extra data merged into the response array
      * @return array the unencoded response
      */
-    public function renderJsonFail($message, $data = null, $extra = []) {
+    public function renderJsonFail($message, $data = null, $extra = [])
+    {
         $response = [
             'status' => 'fail',
             'message' => $message,
@@ -301,7 +311,8 @@ HTML;
      * @param int $code Code to identify error case
      * @return array the unencoded response
      */
-    public function renderJsonError($message, $data = null, $code = null) {
+    public function renderJsonError($message, $data = null, $code = null)
+    {
         $response = [
             'status' => 'error',
             'message' => $message,
@@ -326,29 +337,30 @@ HTML;
      * @param bool $show_msg
      * @return array
      */
-    public function renderResultMessage($message, $success = true, $show_msg = true) {
+    public function renderResultMessage($message, $success = true, $show_msg = true)
+    {
         if ($show_msg == true) {
             if ($success) {
                 $this->core->addSuccessMessage($message);
-            }
-            else {
+            } else {
                 $this->core->addErrorMessage($message);
             }
         }
 
         if ($success === true) {
             return $this->renderJsonSuccess($message);
-        }
-        else {
+        } else {
             return $this->renderJsonFail($message);
         }
     }
 
-    public function renderString($string) {
+    public function renderString($string)
+    {
         $this->output_buffer .= $string;
     }
 
-    public function renderFile($contents, $filename, $filetype = "text/plain") {
+    public function renderFile($contents, $filename, $filetype = "text/plain")
+    {
         $this->useFooter(false);
         $this->useHeader(false);
         $this->output_buffer = $contents;
@@ -363,11 +375,11 @@ HTML;
      * @param array $context Associative array of variables to pass into the Twig renderer
      * @return string Rendered page content
      */
-    public function renderTwigTemplate(string $filename, array $context = []): string {
+    public function renderTwigTemplate(string $filename, array $context = []): string
+    {
         try {
             return $this->twig->render($filename, $context);
-        }
-        catch (\Twig\Error\Error $e) {
+        } catch (\Twig\Error\Error $e) {
             throw new OutputException("{$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
         }
     }
@@ -379,11 +391,11 @@ HTML;
      * @param string $filename Template file basename, file should be in site/app/templates
      * @param array $context Associative array of variables to pass into the Twig renderer
      */
-    public function renderTwigOutput(string $filename, array $context = []): void {
+    public function renderTwigOutput(string $filename, array $context = []): void
+    {
         if ($this->buffer_output) {
             $this->output_buffer .= $this->renderTwigTemplate($filename, $context);
-        }
-        else {
+        } else {
             echo $this->renderTwigTemplate($filename, $context);
         }
     }
@@ -397,7 +409,8 @@ HTML;
      *
      * @return string
      */
-    private function getView($class) {
+    private function getView($class)
+    {
         if (!str_starts_with($class, "app\\views")) {
             $class = "app\\views\\{$class}View";
         }
@@ -409,7 +422,8 @@ HTML;
         return $this->loaded_views[$class];
     }
 
-    public function getOutput() {
+    public function getOutput()
+    {
         $return = "";
         $return .= $this->renderHeader();
         $return .= $this->output_buffer;
@@ -417,29 +431,31 @@ HTML;
         return $return;
     }
 
-    protected function renderHeader() {
+    protected function renderHeader()
+    {
         if ($this->use_header) {
             return $this->controller->header();
-        }
-        else {
+        } else {
             return '';
         }
     }
 
-    protected function renderFooter() {
+    protected function renderFooter()
+    {
         if ($this->use_footer) {
             return $this->controller->footer();
-        }
-        else {
+        } else {
             return '';
         }
     }
 
-    public function bufferOutput() {
+    public function bufferOutput()
+    {
         return $this->buffer_output;
     }
 
-    public function disableBuffer() {
+    public function disableBuffer()
+    {
         if (!$this->buffer_output) {
             return;
         }
@@ -452,8 +468,9 @@ HTML;
     /**
      * Returns the stored output buffer that we've been building
      */
-    public function displayOutput() {
-        echo($this->getOutput());
+    public function displayOutput()
+    {
+        echo ($this->getOutput());
     }
 
     /**
@@ -470,7 +487,8 @@ HTML;
      *
      * @return string
      */
-    public function showException($exception = "", $die = true) {
+    public function showException($exception = "", $die = true)
+    {
         // Load minimal twig if it hasn't been already because we're crashing
         // before $core->loadConfig() could be successfully run.
         if ($this->twig === null) {
@@ -501,7 +519,8 @@ HTML;
      *
      * @return string
      */
-    public function showError($error = "", $die = true) {
+    public function showError($error = "", $die = true)
+    {
         $this->renderOutput(ErrorView::class, "errorPage", $error);
         // @codeCoverageIgnore
         if ($die) {
@@ -511,49 +530,60 @@ HTML;
         return $this->getOutput();
     }
 
-    public function addInternalCss($file, $folder = 'css') {
+    public function addInternalCss($file, $folder = 'css')
+    {
         $this->addCss($this->timestampResource($file, $folder));
     }
 
-    public function addVendorCss($file) {
+    public function addVendorCss($file)
+    {
         $this->addCss($this->timestampResource($file, "vendor"));
     }
 
-    public function addCss(string $url): void {
+    public function addCss(string $url): void
+    {
         $this->css->add($url);
     }
 
-    public function addInternalModuleTwigJs(string $file) {
+    public function addInternalModuleTwigJs(string $file)
+    {
         $this->addModuleJs($this->timestampResource($file, 'mjs/twig'));
     }
 
-    public function addInternalModuleJs(string $file) {
+    public function addInternalModuleJs(string $file)
+    {
         $this->addModuleJs($this->timestampResource($file, 'mjs'));
     }
 
-    public function addInternalJs($file, $folder = 'js') {
+    public function addInternalJs($file, $folder = 'js')
+    {
         $this->addJs($this->timestampResource($file, $folder));
     }
 
-    public function addVendorJs($file) {
+    public function addVendorJs($file)
+    {
         $this->addJs($this->timestampResource($file, "vendor"));
     }
 
-    public function addJs(string $url): void {
+    public function addJs(string $url): void
+    {
         $this->js->add($url);
     }
 
-    public function addModuleJs(string $url): void {
+    public function addModuleJs(string $url): void
+    {
         $this->module_js->add($url);
     }
 
-    public function addServiceWorker(): void {
+    public function addServiceWorker(): void
+    {
         /** add the manifest.js and serverice worker files to the page */
         $this->service_worker = ($this->timestampResource('sw.js', ''));
         $this->manifest_json = $this->timestampResource('manifest.json', '');
     }
 
-    public function timestampResource($file, $folder) {
+    public function timestampResource($file, $folder)
+    {
         $timestamp = filemtime(FileUtils::joinPaths(__DIR__, '..', '..', 'public', $folder, $file));
         return $this->core->getConfig()->getBaseUrl() . $folder . "/" . $file . (($timestamp !== 0) ? "?v={$timestamp}" : "");
     }
@@ -561,80 +591,97 @@ HTML;
     /**
      * Enable or disable whether to use the global header
      */
-    public function useHeader(bool $bool = true): void {
+    public function useHeader(bool $bool = true): void
+    {
         $this->use_header = $bool;
     }
 
-    public function useFooter(bool $bool = true): void {
+    public function useFooter(bool $bool = true): void
+    {
         $this->use_footer = $bool;
     }
 
-    public function setContentOnly(bool $bool = false): void {
+    public function setContentOnly(bool $bool = false): void
+    {
         $this->content_only = $bool;
     }
 
-    public function isContentOnly(): bool {
+    public function isContentOnly(): bool
+    {
         return $this->content_only;
     }
 
-    public function enableMobileViewport(): void {
+    public function enableMobileViewport(): void
+    {
         $this->use_mobile_viewport = true;
     }
 
-    public function useMobileViewport(): bool {
+    public function useMobileViewport(): bool
+    {
         return $this->use_mobile_viewport;
     }
 
-    public function addBreadcrumb($string, $url = null, $external_link = false, $use_as_heading = false) {
+    public function addBreadcrumb($string, $url = null, $external_link = false, $use_as_heading = false)
+    {
         $this->breadcrumbs[] = new Breadcrumb($this->core, $string, $url, $external_link, $use_as_heading);
     }
 
-    public function addRoomTemplatesTwigPath() {
+    public function addRoomTemplatesTwigPath()
+    {
         $this->twig_loader->addPath(FileUtils::joinPaths(dirname(dirname(__DIR__)), 'room_templates'), $namespace = 'room_templates');
     }
 
     /**
      * @return array
      */
-    public function getBreadcrumbs() {
+    public function getBreadcrumbs()
+    {
         return $this->breadcrumbs;
     }
 
-    public function setPageName($page_name) {
+    public function setPageName($page_name)
+    {
         $this->page_name = $page_name;
     }
 
-    public function getPageName() {
+    public function getPageName()
+    {
         if (!empty($this->page_name)) {
             return $this->page_name;
         }
         return end($this->breadcrumbs)->getTitle();
     }
 
-    public function getCss(): Set {
+    public function getCss(): Set
+    {
         return $this->css;
     }
 
-    public function getJs(): Set {
+    public function getJs(): Set
+    {
         return $this->js;
     }
 
-    public function getModuleJs(): Set {
+    public function getModuleJs(): Set
+    {
         return $this->module_js;
     }
 
-    public function getManifastPath(): string {
+    public function getManifastPath(): string
+    {
         return $this->manifest_json;
     }
 
-    public function getServiceWorkerPath(): string {
+    public function getServiceWorkerPath(): string
+    {
         return $this->service_worker;
     }
 
     /**
      * @return float
      */
-    public function getRunTime() {
+    public function getRunTime()
+    {
         return (microtime(true) - $this->start_time);
     }
 
@@ -642,7 +689,8 @@ HTML;
      * Builds a URL
      * @param string[] $parts
      */
-    public function buildUrl(array $parts): string {
+    public function buildUrl(array $parts): string
+    {
         return $this->core->buildUrl($parts);
     }
 
@@ -650,7 +698,8 @@ HTML;
      * Builds a course URL (starts with /<semester>/<course>)
      * @param string[] $parts
      */
-    public function buildCourseUrl(array $parts): string {
+    public function buildCourseUrl(array $parts): string
+    {
         return $this->core->buildCourseUrl($parts);
     }
 
@@ -660,7 +709,8 @@ HTML;
      *
      * @param string $time_zone A time zone available in DateUtils::getAvailableTimeZones()
      */
-    public function setTwigTimeZone(string $time_zone): void {
+    public function setTwigTimeZone(string $time_zone): void
+    {
         $tz = $time_zone === 'NOT_SET/NOT_SET' ? $this->core->getConfig()->getTimezone() : $time_zone;
         /** @var \Twig\Extension\CoreExtension $extension */
         $extension = $this->twig->getExtension(\Twig\Extension\CoreExtension::class);
