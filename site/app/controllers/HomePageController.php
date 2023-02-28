@@ -78,15 +78,6 @@ class HomePageController extends AbstractController
      */
     public function getFile($gradeable_id = null, $user_id = null, int $display_version = 0)
     {
-        // http://localhost:1511/s23/sample/gradeable/grading_homework/grading/details
-        $user = $this->core->getUser();
-
-        // print("gradeable_id: ". $gradeable_id);
-
-        // if (is_null($user_id) || $user->getAccessLevel() !== User::LEVEL_SUPERUSER) {
-        //     $user_id = $user->getId();
-        // }
-
         if (!is_null($gradeable_id) && !is_null($user_id)) {
             $gradeable = $this->tryGetGradeable($gradeable_id, false);
             if ($gradeable === false) {
@@ -124,12 +115,39 @@ class HomePageController extends AbstractController
                             }
                             $working_dir = &$working_dir[$dir];
                         }
-                        $working_dir[$file['name']] = $file['path'];
+                        // regex to get the filename - after active version in path
+                        // filename if not nested
+                        // foldername/../filename if nested
+                        preg_match('/\/[^\/]+\/\d+\/(.+)$/', $file['path'], $namef);
+                        $path = $file['path'];
+                        $dir = $start_dir_name;
+                        $filename = $namef[1];
+                        $gradeable_id = $graded_gradeable->getGradeableId();
+                        $url = make_url($path, $dir, $filename, $gradeable_id, $this->core);
+                        $filename_key = basename($path);
+                        $working_dir[$filename_key] = $url;
                     }
                 }
             }
         };
 
+        function make_url($path, $dir, $filename, $gradeable_id, &$core)
+        {
+            // $filename = basename($path);
+            $corrected_filename = rawurlencode(htmlspecialchars($filename));
+            $path = rawurlencode(htmlspecialchars($path . "%"));
+            $path = rtrim($path, "%2525");
+
+            $url = $core->buildCourseUrl(['display_file']) . '?' . http_build_query([
+                'dir' => $dir,
+                'file' => $corrected_filename,
+                'path' => $path,
+                'ta_grading' => 'true',
+                'gradeable_id' => $gradeable_id,
+            ]);
+
+            return $url;
+        };
 
 
         $submissions = [];
@@ -153,70 +171,32 @@ class HomePageController extends AbstractController
             $add_files($results, $display_version_instance->getResultsFiles(), 'results', $graded_gradeable);
             $add_files($results_public, $display_version_instance->getResultsPublicFiles(), 'results_public', $graded_gradeable);
         }
-        $student_grader = false;
-        if ($this->core->getUser()->getGroup() == User::GROUP_STUDENT) {
-            $student_grader = true;
-        }
 
         $submitter_id = $graded_gradeable->getSubmitter()->getId();
         $anon_submitter_id = $graded_gradeable->getSubmitter()->getAnonId($graded_gradeable->getGradeableId());
         $user_ids[$anon_submitter_id] = $submitter_id;
 
-        // print("user_id: " . $user_id . "\r\n");
-        // print("user_id: " . $user->getId() . "\r\n");
-        // print("Submissions: " . "\r\n");
-        // print_r($submissions);
-
-        // foreach ($submissions as $key1 => $value1) {
-        //     echo "Submission Files for " . $user_id . "\n";
-        //     foreach ($value1 as $key2 => $value2) {
-        //         echo "File name: " . $key2 . "\n";
-        //         $dir = 'submissions';
-        //         $fileUrl = $make_url($value2, $dir, $gradeable_id);
-        //         echo "Url: " . $fileUrl . "\n";
-        //     }
-        // }
-
-
-        $callback = function ($value2, $dir, $gradeable_id) {
-            $make_url = function ($path, $dir, $gradeable_id) {
-                $filename = basename($path);
-                $corrected_name = pathinfo($path, PATHINFO_DIRNAME) . "/" .  $filename;
-                $file_type = FileUtils::getContentType($filename);
-
-
-                $corrected_filename = rawurlencode(htmlspecialchars($filename));
-                $path = rawurlencode(htmlspecialchars($path . "%"));
-                $path = rtrim($path, "%2525");
-
-                $url = $this->core->buildCourseUrl(['display_file']) . '?' . http_build_query([
-                    'dir' => $dir,
-                    'file' => $corrected_filename,
-                    'path' => $path,
-                    'ta_grading' => 'true',
-                    'gradeable_id' => $gradeable_id,
-                ]);
-
-                return $url;
-            };
-            $fileUrl = $make_url($value2, $dir, $gradeable_id);
-            return $fileUrl;
+        $callback = function ($array) use (&$callback) {
+            $result = [];
+            foreach ($array as $key => $value) {
+                if (is_array($value)) {
+                    $result[$key] = $callback($value);
+                } else {
+                    $result[$key] = $value;
+                }
+            }
+            return $result;
         };
 
-        $dir = 'submissions';
-        $fileUrls = [];
-        foreach ($submissions as $key1 => $value1) {
-            foreach ($value1 as $key2 => $path) {
-                $dir = 'submissions';
-                $fileUrl = $callback($path, $dir, $gradeable_id);
-                $filename = basename($path);
-                $fileUrls[] = [$filename => $fileUrl];
-            }
-        }
 
-        // TODO for nested files and for no submissions
+        // returns null if no files were found
         return MultiResponse::JsonOnlyResponse(
-            JsonResponse::getSuccessResponse(["user_id" => $user_id, "submissions" => $fileUrls])
+            JsonResponse::getSuccessResponse([
+                "user_id" => $user_id,
+                "submissions" => $callback($submissions)["submissions"],
+                "results" => $callback($results)["results"],
+                "results_public" => $callback($results_public)["results_public"]
+            ])
         );
     }
 
